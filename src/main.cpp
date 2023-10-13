@@ -6,23 +6,25 @@
 #include "boards.h"
 #include "math.h"
 
-#define LoRa_signal_bandwidth 125E3
-#define LoRa_spreading_factor 7
-
-#define c 299792458 // Speed of light in m/s
-#define Gt 1        // Transmitter antenna gain in dBi
-#define Gr 1        // Receiver antenna gain in dBi
-
 WebServer server(80);
 
-int interval = 1000;
-int lastSendTime = 0;
-int msgCount = 0;
+int const nodes = 3;
 
-// fiis
-double distance(double rssi, double snr)
+int ids[nodes] = {0, 0, 0};
+int longitudes[nodes];
+int latitudes[nodes];
+int times[nodes];
+double distances[nodes];
+int rssis[nodes];
+
+int id = 0;
+int type = 0;
+int longitude = 0;
+int latitude = 0;
+
+double calculateDistance(double rssi)
 {
-    return pow(10, ((-45 - rssi) / (10 * 2)));
+    return pow(10, -rssi / 10 * 2);
 }
 
 void onReceive(int size)
@@ -30,28 +32,111 @@ void onReceive(int size)
     if (size != 0)
     {
         double rssi = LoRa.packetRssi();
-        double snr = LoRa.packetSnr();
 
-        Serial.println(LoRa.readString());
+        double distance = calculateDistance(rssi);
 
-        Serial.println(rssi);
-        Serial.println(snr);
+        int receivedId = LoRa.readStringUntil(';').toInt();
 
+        int index = 0;
+
+        for (int i = 0; nodes < i; i++)
+        {
+            if (ids[i] == receivedId)
+            {
+                index = i;
+
+                break;
+            }
+
+            else if (ids[i] == 0)
+            {
+                index = i;
+
+                ids[index] = receivedId;
+
+                break;
+            }
+        }
+
+        distances[index] = distance;
+        rssis[index] = rssi;
+        longitudes[index] = LoRa.readStringUntil(';').toInt();
+        latitudes[index] = LoRa.readStringUntil(';').toInt();
+
+        Serial.println("----");
         Serial.println("Result!");
-        Serial.println(distance(rssi, snr));
+
+        Serial.println(LoRa.readStringUntil(';'));
+
+        Serial.println();
     }
 }
 
-void sendMessage(String outgoing)
+void sendMessage(String message)
 {
+    String outgoing = String(id) + ";" +
+                      String(longitude) + ";" +
+                      String(latitude) + ";" +
+                      message;
+
     LoRa.beginPacket();
-    // LoRa.write(destination);
-    // LoRa.write(localAddress);
-    LoRa.write(msgCount);
+
     LoRa.write(outgoing.length());
     LoRa.print(outgoing);
+
     LoRa.endPacket();
-    msgCount++;
+
+    LoRa.receive();
+}
+
+void onId()
+{
+    server.send(200, "text/html", String(id));
+}
+
+void onLat()
+{
+    server.send(200, "text/html", String(latitude));
+}
+
+void onLon()
+{
+    server.send(200, "text/html", String(longitude));
+}
+
+void onType()
+{
+    server.send(200, "text/html", String(type));
+}
+
+void onUpdate()
+{
+    String data = server.arg(0);
+
+    int index1 = 0;
+    int index2 = data.indexOf(';', index1);
+    id = data.substring(index1, index2).toInt();
+
+    index1 = index2 + 1;
+    index2 = data.indexOf(';', index1);
+    longitude = data.substring(index1, index2).toInt();
+
+    index1 = index2 + 1;
+    index2 = data.indexOf(';', index1);
+    latitude = data.substring(index1, index2).toInt();
+
+    index1 = index2 + 1;
+    index2 = data.indexOf(';', index1);
+    type = data.substring(index1, index2).toInt();
+
+    server.send(200);
+}
+
+void onMessage()
+{
+    sendMessage(server.arg(0));
+
+    server.send(200);
 }
 
 void onIndex()
@@ -71,6 +156,8 @@ void onNotFound()
 void setup()
 {
     initBoard();
+
+    delay(1500);
 
     if (!SPIFFS.begin())
     {
@@ -100,13 +187,16 @@ void setup()
     Serial.println(WiFi.localIP());
 
     server.on("/", onIndex);
+    server.on("/id", onId);
+    server.on("/lat", onLat);
+    server.on("/lon", onLon);
+    server.on("/type", onType);
+    server.on("/update", HTTP_POST, onUpdate);
+    server.on("/message", HTTP_POST, onMessage);
     server.onNotFound(onNotFound);
     server.begin();
 
     LoRa.setPins(RADIO_CS_PIN, RADIO_RST_PIN, RADIO_DIO0_PIN);
-
-    LoRa.setSignalBandwidth(LoRa_signal_bandwidth);
-    LoRa.setSpreadingFactor(LoRa_spreading_factor);
 
     if (LoRa.begin(LoRa_frequency))
     {
@@ -123,18 +213,7 @@ void setup()
 
 void loop()
 {
-    /*if (millis() - lastSendTime > interval)
-    {
-        String message = "HeLoRa World!";
-        sendMessage(message);
-        Serial.println("Sending " + message);
-        lastSendTime = millis();
-        interval = random(2000) + 1000;
-        LoRa.receive();
-    }
+    server.handleClient();
 
-    else
-    {
-        server.handleClient();
-    }*/
+    delay(1000);
 }

@@ -9,9 +9,99 @@
     <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
     <script src='main.js'></script>
 </head>
+<script>
+    window.onload = async function () {
+        var id = await fetch('id');
+        var lat = await fetch('lat');
+        var lon = await fetch('lon');
+        var type = await fetch('type');
+
+        document.getElementById('id').value = await id.text();
+        document.getElementById('lat').value = await lat.text();
+        document.getElementById('lon').value = await lon.text();
+
+        if (await type.text() === '0') {
+            document.getElementById('fixed').checked = true;
+            document.getElementById('lat').disabled = false;
+            document.getElementById('lon').disabled = false;
+        }
+
+        else {
+            document.getElementById('mobile').checked = true;
+            document.getElementById('lat').disabled = true;
+            document.getElementById('lon').disabled = true;
+        }
+
+        document.getElementById('fixed').addEventListener('change', function () {
+            document.getElementById('lat').disabled = false;
+            document.getElementById('lon').disabled = false;
+        });
+
+        document.getElementById('mobile').addEventListener('change', function () {
+            document.getElementById('lat').disabled = true;
+            document.getElementById('lon').disabled = true;
+        });
+
+        document.getElementById('save').addEventListener('click', async function () {
+            var id = document.getElementById('id').value;
+            var lon = document.getElementById('lon').value;
+            var lat = document.getElementById('lat').value;
+
+            var type = document.getElementById('fixed').checked ? 0 : 1;
+
+            var data = id + ";" +
+                lon + ";" +
+                lat + ";" +
+                type;
+
+            await fetch('update', {
+                method: 'POST',
+                body: data
+            })
+        });
+    }
+</script>
+<style>
+    #form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .radio {
+        display: flex;
+    }
+
+    p {
+        margin: 0px;
+    }
+</style>
 
 <body>
-    <h1>hello</h1>
+    <div id='form'>
+        <div>
+            <p>Identificação:</p>
+            <input type='text' id='id' />
+        </div>
+        <div>
+            <p>Latitude:</p>
+            <input type='text' id='lat' />
+        </div>
+        <div>
+            <p>Longitude:</p>
+            <input type='text' id='lon' />
+        </div>
+        <p>Tipo:</p>
+        <div class='radio'>
+            <input type='radio' name='type' value='0' id="fixed" />
+            <p>Fixo</p>
+        </div>
+        <div class='radio'>
+            <input type='radio' name='type' value='1' id="mobile" />
+            <p>Movel</p>
+        </div>
+        <input type='button' value='Salvar' id="save" />
+    </div>
 </body>
 
 </html>
